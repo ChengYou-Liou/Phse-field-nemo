@@ -30,6 +30,7 @@ from physicsnemo.sym.loss import PointwiseLossNorm
 
 from custom_plotter import CorrosionPlotter
 from custom_constraint import RarInteriorConstraint
+from TopK import TopKLoss
 
 def importance_measure(invar):
     x = invar['x']
@@ -177,30 +178,45 @@ def run (cfg: PhysicsNeMoConfig) ->None:
     domain = Domain()
 
     #Constraint
-    #interior_ch = PointwiseInteriorConstraint(
-    #    nodes=nodes,
-    #    geometry=geo,
-    #    outvar={"Cahn-Hilliard": 0},
-    #    batch_size=cfg.batch_size.cahn_hilliard,
-    #    parameterization=time_range,
-    #    lambda_weighting = {
-    #        "Cahn-Hilliard" : 1e18,
-    #    },
-    #)
-    #domain.add_constraint(interior_ch, "interior_ch")
+    interior_ch = PointwiseInteriorConstraint(
+        nodes=nodes,
+        geometry=geo,
+        outvar={"Cahn-Hilliard": 0},
+        batch_size=cfg.batch_size.cahn_hilliard,
+        parameterization=time_range,
+        lambda_weighting = {
+            "Cahn-Hilliard" : 1e18,
+        },
+    )
+    domain.add_constraint(interior_ch, "interior_ch")
 
-    #interior_ac = PointwiseInteriorConstraint(
-    #    nodes=nodes,
-    #    geometry=geo,
-    #    outvar={"Allen-Cahn": 0},
-    #    batch_size=cfg.batch_size.allen_cahn,
-    #    parameterization=time_range,
-    #    #loss=CustomPointwiseLossNorm(),
-    #    lambda_weighting = {
-    #        "Allen-Cahn":1.0,
-    #    },
-    #)
-    #domain.add_constraint(interior_ac, "interior_ac")
+    interior_ac_global = PointwiseInteriorConstraint(
+        nodes=nodes,
+        geometry=geo,
+        outvar={"Allen-Cahn": 0},
+        batch_size=cfg.batch_size.allen_cahn_global,
+        parameterization=time_range,
+        lambda_weighting = {
+            "Allen-Cahn":1.0,
+        },
+    )
+    domain.add_constraint(interior_ac_global, "interior_ac_global")
+
+    interior_rar = RarInteriorConstraint(
+        nodes=nodes,
+        geometry=geo,
+        dataset=None,
+        outvar={"Allen-Cahn":0, "Cahn-Hilliard":0,},
+        parameterization=time_range,
+        batch_size=4000,
+        fixed_dataset=True,
+        lambda_weighting={
+            "Allen-Cahn":1.0,
+            "Cahn-Hilliard": 5.0e15,
+        },
+        loss=TopKLoss(),
+    )
+    domain.add_constraint(interior_rar, "interior_rar")
 
     #initial condition
     IC_phi = PointwiseInteriorConstraint(
@@ -231,22 +247,6 @@ def run (cfg: PhysicsNeMoConfig) ->None:
         },
     )
     domain.add_constraint(IC_local, "IC_local")
-
-    test = RarInteriorConstraint(
-        nodes=nodes,
-        geometry=geo,
-        dataset=None,
-        outvar={"Allen-Cahn":0, "Cahn-Hilliard":0,},
-        parameterization=time_range,
-        batch_size=4000,
-        fixed_dataset=True,
-        lambda_weighting={
-            "Allen-Cahn":1.0,
-            "Cahn-Hilliard": 5.0e15,
-        },
-        loss=PointwiseLossNorm(),
-    )
-    domain.add_constraint(test, "test")
 
     IC_c = PointwiseInteriorConstraint(
         nodes=nodes,
